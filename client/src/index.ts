@@ -2,8 +2,24 @@ import express from "express";
 import { Issuer } from "openid-client";
 import crypto from "crypto";
 
+import session from "express-session";
 const app = express();
 const port = 4000;
+
+app.use(
+  session({
+    secret: "tiny-rp-secret",
+    cookie: {},
+  })
+);
+// https://www.typescriptlang.org/docs/handbook/declaration-merging.html#module-augmentation
+declare module "express-session" {
+  interface SessionData {
+    state: string;
+    nonce: string;
+  }
+}
+
 
 const issuer = new Issuer({
   issuer: "http://localhost:3000",
@@ -18,9 +34,16 @@ const client = new Client({
 });
 
 app.get("/", async (req, res) => {
+  const state = crypto.randomBytes(16).toString('hex');
+  req.session.state = state;
+  const nonce = crypto.randomBytes(16).toString("hex");
+req.session.nonce = nonce;
+
   const authorizationUri = client.authorizationUrl({
     redirect_uri: "http://localhost:4000/oidc/callback",
     scope: "openid",
+    state,
+    nonce
   });
   res.send(`<!DOCTYPE html>
 <html>
@@ -40,6 +63,13 @@ app.get("/oidc/callback", async (req, res) => {
   const redirect_uri = "http://localhost:4000/oidc/callback";
   const code = String(req.query.code);
   const scope = String(req.query.scope);
+  console.log(req.query.state, req.session.state)
+
+  if (req.session.state !== req.query.state) {
+    res.status(400);
+    res.json({ error: "invalid state" });
+    return;
+  }
 
   try {
     const tokenResponse = await fetch(
@@ -67,6 +97,11 @@ app.get("/oidc/callback", async (req, res) => {
     const jwksUri = configuration["jwks_uri"];
     const tokenSet = await tokenResponse.json();
     const idToken = tokenSet.id_token;
+    if (decodeToken(idToken).payload.nonce !== req.session.nonce) {
+      res.status(400);
+      res.json({ error: "invalid nonce" });
+      return;
+    }
     const jwks = await (await fetch(jwksUri)).json();
     const jwk = jwks.keys.find(
       (jwk: any) =>
@@ -89,7 +124,6 @@ app.get("/oidc/callback", async (req, res) => {
     return;
   }
 });
-
 
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
@@ -115,4 +149,11 @@ const verifyToken = (token: string, jwk: string) => {
   verify.update(signatureData);
   const decodedSignature = base64urlDecode(encodedSignature);
   return verify.verify(publicKey, Buffer.from(decodedSignature, "base64"));
+};
+
+const decodeToken = (token: string) => {
+  const [encodedHeader, encodedPayload, _encodedSignature] = token.split(".");
+  const header = JSON.parse(base64urlDecode(encodedHeader));
+  const payload = JSON.parse(base64urlDecode(encodedPayload));
+  return { header, payload };
 };
