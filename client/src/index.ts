@@ -41,27 +41,27 @@ app.get("/oidc/callback", async (req, res) => {
   const scope = String(req.query.scope);
 
   try {
-    const tokenResponse = await fetch(
-      "http://localhost:3000/openid-connect/token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          code,
-          redirect_uri,
-          scope,
-          grant_type: "authorization_code",
-          client_id: "tiny-client",
-        }),
-      }
-    );
-    const tokenSet = await tokenResponse.json();
-    console.log(tokenSet);
+    // const tokenResponse = await fetch(
+    //   "http://localhost:3000/openid-connect/token",
+    //   {
+    //     method: "POST",
+    //     headers: {
+    //       "Content-Type": "application/x-www-form-urlencoded",
+    //     },
+    //     body: new URLSearchParams({
+    //       code,
+    //       redirect_uri,
+    //       scope,
+    //       grant_type: "authorization_code",
+    //       client_id: "tiny-client",
+    //     }),
+    //   }
+    // );
+    // const tokenSet = await tokenResponse.json();
+    // console.log(tokenSet);
     // TODO: トークンを検証するコードは後で追加します
     res.status(200);
-    res.json({ tokenSet });
+    res.json({ code });
     return;
   } catch (error) {
     console.error("Access Token Error: ", error);
@@ -70,6 +70,7 @@ app.get("/oidc/callback", async (req, res) => {
     return;
   }
 });
+
 
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
