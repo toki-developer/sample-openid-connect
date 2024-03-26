@@ -31,6 +31,7 @@ import { AuthCode } from "../models/auth_code";
 import { Client } from "../models/client";
 import { Context } from "../models/context";
 import { ServerResponse } from "http";
+import { JwtService } from "../services/jwt_service";
 
 export const postToken = (db: Context, params: URLSearchParams, res: ServerResponse) => {
     const clientId = params.get('client_id');
@@ -62,13 +63,16 @@ export const postToken = (db: Context, params: URLSearchParams, res: ServerRespo
     const accessToken = AccessToken.build(authCode!.userId);
     accessToken.save(db.accessTokens);
 
+    const jwtService = new JwtService()
+    const jwt = jwtService.generate('http://localhost:3000', 'tiny-client');
+
     res.writeHead(200, {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
       Pragma: 'no-cache'
     });
     const data: ResponseData = {
-      id_token: 'dummy-id-token',
+        id_token: jwt,
       access_token: accessToken.token,
       token_type: 'Bearer',
       expires_in: 86400

@@ -1,5 +1,6 @@
 import express from "express";
 import { Issuer } from "openid-client";
+import crypto from "crypto";
 
 const app = express();
 const port = 4000;
@@ -58,11 +59,29 @@ app.get("/oidc/callback", async (req, res) => {
         }),
       }
     );
+    const configuration = await (
+      await fetch(
+        "http://localhost:3000/openid-connect/.well-known/openid-configuration"
+      )
+    ).json();
+    const jwksUri = configuration["jwks_uri"];
     const tokenSet = await tokenResponse.json();
-    console.log(tokenSet);
-    res.status(200);
-    res.json({ code, tokenSet });
-    return;
+    const idToken = tokenSet.id_token;
+    const jwks = await (await fetch(jwksUri)).json();
+    const jwk = jwks.keys.find(
+      (jwk: any) =>
+        jwk.kty === "RSA" && jwk.alg === "RS256" && jwk.use === "sig"
+    );
+    const verified = verifyToken(idToken, jwk);
+    if (verified) {
+      res.status(200);
+      res.json({ tokenSet });
+      return;
+    } else {
+      res.status(401);
+      res.json({ error: "invalid token" });
+      return;
+    }
   } catch (error) {
     console.error("Access Token Error: ", error);
     res.status(500);
@@ -75,3 +94,25 @@ app.get("/oidc/callback", async (req, res) => {
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });
+
+
+const base64urlDecode = (input: string) =>{
+  input += "=".repeat(4 - (input.length % 4));
+  return Buffer.from(
+    input.replace(/-/g, "+").replace(/_/g, "/"),
+    "base64"
+  ).toString("utf-8");
+}
+
+const verifyToken = (token: string, jwk: string) => {
+  const publicKey = crypto
+    .createPublicKey({ key: jwk, format: "jwk" })
+    .export({ format: "pem", type: "spki" });
+
+  const [encodedHeader, encodedPayload, encodedSignature] = token.split(".");
+  const signatureData = `${encodedHeader}.${encodedPayload}`;
+  const verify = crypto.createVerify("RSA-SHA256");
+  verify.update(signatureData);
+  const decodedSignature = base64urlDecode(encodedSignature);
+  return verify.verify(publicKey, Buffer.from(decodedSignature, "base64"));
+};
