@@ -11,14 +11,16 @@ export const login = (db: Context, query: ParsedUrlQuery, params: URLSearchParam
   const scope = query.scope;
   const clientId = query.client_id;
   const issuer = 'http://localhost:3000';
+  const state = query.state;
+  const nonce = query.nonce;
 
   if (email && password && User.login(db.users, email, password)) {
     // このif文の中身を全て置き換える
     const user = User.findByEmail(db.users, email) as User;
-    const authCode = AuthCode.build(user.id, clientId as string, redirectUri as string);
+    const authCode = AuthCode.build(user.id, clientId as string, redirectUri as string, (nonce as string) || null);
     authCode.save(db.authCodes);
     res.writeHead(302, {
-      Location: `${redirectUri}?code=${authCode.code}&iss=${issuer}&scope=${scope}`
+      Location: `${redirectUri}?code=${authCode.code}&iss=${issuer}&scope=${scope}&state=${state}`
     });
     res.end();
   } else {

@@ -64,7 +64,7 @@ export const postToken = (db: Context, params: URLSearchParams, res: ServerRespo
     accessToken.save(db.accessTokens);
 
     const jwtService = new JwtService()
-    const jwt = jwtService.generate('http://localhost:3000', 'tiny-client');
+    const jwt = jwtService.generate('http://localhost:3000', 'tiny-client', authCode!.nonce!);
 
     res.writeHead(200, {
       'Content-Type': 'application/json',
